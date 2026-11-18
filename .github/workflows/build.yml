@@ -1,0 +1,36 @@
+name: Build
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build app
+        run: bash build.sh
+      - name: Make installer and zip
+        run: |
+          mkdir -p pkgroot
+          cp -R build/Wheelhouse.app pkgroot/
+          pkgbuild --root pkgroot --install-location /Applications \
+            --identifier app.wheelhouse.mouse --version "1.0.${{ github.run_number }}" \
+            build/Wheelhouse.pkg
+          (cd build && ditto -c -k --keepParent Wheelhouse.app Wheelhouse-app.zip)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Wheelhouse
+          path: |
+            build/Wheelhouse.pkg
+            build/Wheelhouse-app.zip
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="build-${{ github.run_number }}"
+          gh release create "$TAG" build/Wheelhouse.pkg build/Wheelhouse-app.zip \
+            --title "Wheelhouse build ${{ github.run_number }}" \
+            --notes "Download Wheelhouse.pkg and double-click it to install into Applications." --latest
